@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from models.unet_parts import Down, DoubleConv, Up, OutConv
 from models.unet_parts_depthwise_separable import DoubleConvDS, UpDS, DownDS
 from models.layers import CBAM
@@ -118,7 +121,7 @@ class UNetDS(Precip_regression_base):
         return logits
 
 
-class UNetDS_Attention(Precip_regression_base):
+class UNetDS_LSTM_Attention(Precip_regression_base):
     def __init__(self, hparams):
         super().__init__(hparams=hparams)
         self.n_channels = self.hparams.n_channels
@@ -162,7 +165,49 @@ class UNetDS_Attention(Precip_regression_base):
         x = self.up4(x, x1Att)
         logits = self.outc(x)
         return logits
+        # Apply LSTM
+        lstm_out, _ = self.lstm1(lstm_input)  # Output: [batch, height*width, hidden_dim*2]
+        
+        # Apply attention to LSTM output
+        attention_weights = self.lstm_attention(lstm_out)  # [batch, height*width, 1]
+        attention_weights = F.softmax(attention_weights, dim=1)
+        
+        # Apply attention weights
+        attended_out = lstm_out * attention_weights
+        
+        # Reshape back to spatial dimensions
+        attended_out = attended_out.reshape(batch_size, height, width, -1)
+        attended_out = attended_out.permute(0, 3, 1, 2)  # [batch, channels*2, height, width]
+        
+        # Convert back to original number of channels
+        attended_out = self.post_lstm_conv(attended_out)  # [batch, channels, height, width]
+        
+        return attended_out
 
+    def forward(self, x):
+        # Encoder path
+        x1 = self.inc(x)
+        x1Att = self.cbam1(x1)
+        x2 = self.down1(x1)
+        x2Att = self.cbam2(x2)
+        x3 = self.down2(x2)
+        x3Att = self.cbam3(x3)
+        x4 = self.down3(x3)
+        x4Att = self.cbam4(x4)
+        x5 = self.down4(x4)
+        x5Att = self.cbam5(x5)
+        
+        # Apply LSTM and attention at the bottleneck
+        x5_lstm = self.apply_lstm_attention(x5Att)
+        
+        # Decoder path
+        x = self.up1(x5_lstm, x4Att)
+        x = self.up2(x, x3Att)
+        x = self.up3(x, x2Att)
+        x = self.up4(x, x1Att)
+        logits = self.outc(x)
+        
+        return logits
 
 class UNetDS_Attention_4CBAMs(Precip_regression_base):
     def __init__(self, hparams):
