@@ -15,6 +15,8 @@ from lightning.pytorch.tuner import Tuner
 def train_regression(hparams, find_batch_size_automatically: bool = False):
     if hparams.model == "UNetDS_Attention":
         net = unet_regr.UNetDS_Attention(hparams=hparams)
+    elif hparams.model == "UNetDS_LSTM_Attention":
+        net = unet_regr.UNetDS_LSTM_Attention(hparams=hparams)
     elif hparams.model == "UNet_Attention":
         net = unet_regr.UNet_Attention(hparams=hparams)
     elif hparams.model == "UNet":
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     # train_regression(args, find_batch_size_automatically=False)
 
     # All the models below will be trained
-    for m in ["UNet", "UNetDS", "UNet_Attention", "UNetDS_Attention"]:
+    for m in ["UNet", "UNetDS", "UNet_Attention", "UNetDS_Attention", "UNetDS_LSTM_Attention"]:
         args.model = m
         print(f"Start training model: {m}")
         train_regression(args, find_batch_size_automatically=False)
